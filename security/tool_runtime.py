@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from config import CONFIG
-from agent.policy import policy_check
+from security.policy import policy_check
 from lab.utils import log_event
 
 
@@ -45,7 +45,7 @@ class ToolRuntime:
             "ok": decision["decision"] in {"allow", "audit", "dry_run"},
             "executed": decision["executed"],
             "decision": decision["decision"],
-            "message": "Tool call recorded; real execution is disabled in offline MVP.",
+            "message": "Tool call processed by external security runtime.",
         }
 
     def _redact_args(self, args: dict) -> dict:
@@ -53,4 +53,3 @@ class ToolRuntime:
         if "command" in redacted:
             redacted["command"] = "REDACTED_DRY_RUN_COMMAND"
         return redacted
-

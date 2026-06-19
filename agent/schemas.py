@@ -1,0 +1,99 @@
+from __future__ import annotations
+
+import json
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+
+DerivationType = Literal["direct", "potential", "none", "unknown"]
+
+
+class ToolCallIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool_name: str
+    args: dict[str, Any] = Field(default_factory=dict)
+    reason: str = ""
+    derived_from_memory_ids: list[str] = Field(default_factory=list)
+    derivation_type: DerivationType = "unknown"
+
+
+class MemoryCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str
+    source_id: str
+    source_type: str
+    source_trust_level: str
+    risk_tags: list[str] = Field(default_factory=list)
+    created_from_phase: str
+
+
+class AgentTaskResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answer: str
+    tool_calls: list[ToolCallIntent] = Field(default_factory=list)
+    memory_candidate: MemoryCandidate | None = None
+    raw_output: Any | None = None
+
+    def to_runner_dict(self) -> dict[str, Any]:
+        return {
+            "answer": self.answer,
+            "tool_calls": [tool_call.model_dump() for tool_call in self.tool_calls],
+        }
+
+
+def parse_agent_task_result(output: Any) -> AgentTaskResult:
+    payload = _coerce_output_payload(output)
+    try:
+        result = AgentTaskResult.model_validate(payload)
+    except ValidationError as exc:
+        raise ValueError(f"CrewAI output did not match AgentTaskResult schema: {exc}") from exc
+    return result.model_copy(update={"raw_output": _safe_raw_output(output)})
+
+
+def _coerce_output_payload(output: Any) -> Any:
+    if isinstance(output, AgentTaskResult):
+        return output.model_dump()
+    if isinstance(output, BaseModel):
+        return output.model_dump()
+    if isinstance(output, dict):
+        return output
+    for attr in ("pydantic", "json_dict", "raw"):
+        value = getattr(output, attr, None)
+        if value is None:
+            continue
+        if isinstance(value, BaseModel):
+            return value.model_dump()
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            return _loads_json(value)
+    if isinstance(output, str):
+        return _loads_json(output)
+    return _loads_json(str(output))
+
+
+def _loads_json(value: str) -> Any:
+    text = value.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("CrewAI output was not valid JSON.") from exc
+
+
+def _safe_raw_output(output: Any) -> Any:
+    if isinstance(output, BaseModel):
+        return output.model_dump()
+    if isinstance(output, (dict, list, str, int, float, bool)) or output is None:
+        return output
+    return str(output)

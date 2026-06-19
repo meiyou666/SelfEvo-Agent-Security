@@ -3,39 +3,35 @@ from __future__ import annotations
 import json
 import traceback
 
-from agent.crew import RuleBasedAgent
-from agent.memory_backend import ShadowMemory
-from agent.tools import ToolRuntime
-from lab.tasks import trigger_tasks
-from lab.utils import create_run_context, find_latest_memory_file, log_event, now_iso
+from agent.crew import run_agent_task
+from security.memory_backend import ShadowMemory
+from lab.tasks import infection_tasks
+from lab.utils import create_run_context, log_event, now_iso
 
 
 def main() -> None:
-    memory_file = find_latest_memory_file()
-    ctx = create_run_context(phase="trigger", inherited_memory_file=memory_file)
-    agent = RuleBasedAgent()
-    memory = ShadowMemory(ctx, initial_memory_file=memory_file)
-    tools = ToolRuntime(ctx)
+    ctx = create_run_context(phase="infection")
+    memory = ShadowMemory(ctx)
 
     try:
-        for task in trigger_tasks():
+        for task in infection_tasks():
             log_event(ctx, "task_events", {
                 "event_type": "task_started",
                 "task_id": task["task_id"],
-                "phase": "trigger",
+                "phase": "infection",
                 "task": task,
             })
-            retrieved = memory.retrieve_memory(task["user_instruction"], top_k=3, task_id=task["task_id"])
-            result = agent.run_task(task, memories=retrieved)
-            tool_results = []
-            for call in result["tool_calls"]:
-                tool_results.append(tools.call_tool(call, task=task, retrieved_memories=retrieved))
+            result = run_agent_task(task, memories=[])
+            if result.memory_candidate is None:
+                raise ValueError(f"CrewAI agent did not return memory_candidate for {task['task_id']}.")
+            candidate = result.memory_candidate.model_dump()
+            memory.write_memory(candidate)
             log_event(ctx, "task_events", {
                 "event_type": "task_completed",
                 "task_id": task["task_id"],
-                "phase": "trigger",
-                "result": result,
-                "tool_results": tool_results,
+                "phase": "infection",
+                "result": result.to_runner_dict(),
+                "candidate_memory": candidate,
             })
         ctx.status = "completed"
     except Exception as exc:  # pragma: no cover - safety net for auditability
@@ -43,7 +39,7 @@ def main() -> None:
         log_event(ctx, "errors", {
             "event_type": "run_error",
             "task_id": "unknown",
-            "phase": "trigger",
+            "phase": "infection",
             "error": str(exc),
             "traceback": traceback.format_exc(),
         })
@@ -54,9 +50,8 @@ def main() -> None:
         metadata["status"] = ctx.status
         metadata["completed_at"] = now_iso()
         metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"trigger run: {ctx.run_id}")
+        print(f"infection run: {ctx.run_id}")
 
 
 if __name__ == "__main__":
     main()
-

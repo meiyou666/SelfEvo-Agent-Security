@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from importlib.metadata import PackageNotFoundError, version
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,10 @@ def create_run_context(phase: str, inherited_memory_file: Path | None = None) ->
         "run_id": run_id,
         "phase": phase,
         "mode": CONFIG.mode,
+        "agent_backend": CONFIG.agent_backend,
+        "llm_model": CONFIG.llm_model,
+        "llm_temperature": CONFIG.llm_temperature,
+        "crewai_version": _package_version("crewai"),
         "policy_mode": CONFIG.policy_mode,
         "status": "running",
         "created_at": now_iso(),
@@ -38,6 +43,13 @@ def create_run_context(phase: str, inherited_memory_file: Path | None = None) ->
     for name in ["memory_events", "tool_calls", "policy_events", "task_events", "errors"]:
         (run_dir / f"{name}.jsonl").write_text("", encoding="utf-8")
     return RunContext(run_id=run_id, run_dir=run_dir, phase=phase)
+
+
+def _package_version(package_name: str) -> str | None:
+    try:
+        return version(package_name)
+    except PackageNotFoundError:
+        return None
 
 
 def log_event(ctx: RunContext, stream: str, event: dict) -> None:
@@ -63,4 +75,3 @@ def find_latest_memory_file() -> Path | None:
         return None
     candidates = sorted(LOG_ROOT.glob(f"*/{CONFIG.memory_path_name}"), key=lambda path: path.stat().st_mtime, reverse=True)
     return candidates[0] if candidates else None
-

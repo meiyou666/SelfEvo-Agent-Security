@@ -1,0 +1,2 @@
+crewai>=0.130.0
+pydantic>=2.0
