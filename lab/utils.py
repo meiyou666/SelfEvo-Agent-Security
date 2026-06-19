@@ -15,7 +15,7 @@ class RunContext:
     run_id: str
     run_dir: Path
     phase: str
-    status: str = "running"
+    status: str = "started"
 
 
 def now_iso() -> str:
@@ -28,14 +28,20 @@ def create_run_context(phase: str, inherited_memory_file: Path | None = None) ->
     run_dir.mkdir(parents=True, exist_ok=False)
     metadata = {
         "run_id": run_id,
+        "schema_version": CONFIG.schema_version,
         "phase": phase,
         "mode": CONFIG.mode,
         "agent_backend": CONFIG.agent_backend,
+        "memory_backend": CONFIG.memory_backend,
+        "model_name": CONFIG.llm_model,
         "llm_model": CONFIG.llm_model,
         "llm_temperature": CONFIG.llm_temperature,
         "crewai_version": _package_version("crewai"),
         "policy_mode": CONFIG.policy_mode,
-        "status": "running",
+        "task_set_version": CONFIG.task_set_version,
+        "sample_set_version": CONFIG.sample_set_version,
+        "random_seed": CONFIG.random_seed,
+        "status": "started",
         "created_at": now_iso(),
         "inherited_memory_file": str(inherited_memory_file) if inherited_memory_file else None,
     }
@@ -55,8 +61,12 @@ def _package_version(package_name: str) -> str | None:
 def log_event(ctx: RunContext, stream: str, event: dict) -> None:
     event = {
         "event_id": f"evt_{uuid4().hex[:12]}",
+        "event_type": "unknown",
         "run_id": ctx.run_id,
+        "task_id": "unknown",
+        "phase": ctx.phase,
         "timestamp": now_iso(),
+        "schema_version": CONFIG.schema_version,
         **event,
     }
     path = ctx.run_dir / f"{stream}.jsonl"

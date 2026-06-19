@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
-DerivationType = Literal["direct", "potential", "none", "unknown"]
+DerivationType = Literal["directly_derived", "potentially_derived", "unknown_derivation"]
 
 
 class ToolCallIntent(BaseModel):
@@ -16,7 +16,18 @@ class ToolCallIntent(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
     reason: str = ""
     derived_from_memory_ids: list[str] = Field(default_factory=list)
-    derivation_type: DerivationType = "unknown"
+    derivation_type: DerivationType = "unknown_derivation"
+
+    @field_validator("derivation_type", mode="before")
+    @classmethod
+    def normalize_derivation_type(cls, value: Any) -> str:
+        aliases = {
+            "direct": "directly_derived",
+            "potential": "potentially_derived",
+            "none": "unknown_derivation",
+            "unknown": "unknown_derivation",
+        }
+        return aliases.get(value, value)
 
 
 class MemoryCandidate(BaseModel):

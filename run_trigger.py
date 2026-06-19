@@ -22,6 +22,8 @@ def main() -> None:
                 "event_type": "task_started",
                 "task_id": task["task_id"],
                 "phase": "trigger",
+                "task_type": task["task_type"],
+                "status": "started",
                 "task": task,
             })
             retrieved = memory.retrieve_memory(task["user_instruction"], top_k=3, task_id=task["task_id"])
@@ -33,6 +35,9 @@ def main() -> None:
                 "event_type": "task_completed",
                 "task_id": task["task_id"],
                 "phase": "trigger",
+                "task_type": task["task_type"],
+                "status": "completed",
+                "result_summary": "trigger task completed without direct tool execution by runner",
                 "result": result.to_runner_dict(),
                 "tool_results": tool_results,
             })
@@ -40,10 +45,12 @@ def main() -> None:
     except Exception as exc:  # pragma: no cover - safety net for auditability
         ctx.status = "failed"
         log_event(ctx, "errors", {
-            "event_type": "run_error",
+            "event_type": "error",
             "task_id": "unknown",
             "phase": "trigger",
-            "error": str(exc),
+            "error_type": "run_error",
+            "message": str(exc),
+            "recoverable": False,
             "traceback": traceback.format_exc(),
         })
         raise
