@@ -16,6 +16,7 @@ if load_dotenv:
 ROOT = Path(__file__).resolve().parent
 LOG_ROOT = ROOT / "logs" / "runs"
 DATA_ROOT = ROOT / "data"
+FIXTURE_ROOTS = (DATA_ROOT / "poison_pages", DATA_ROOT / "fixtures")
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class ExperimentConfig:
     task_set_version: str = os.getenv("TASK_SET_VERSION", "tasks_v0.1")
     sample_set_version: str = os.getenv("SAMPLE_SET_VERSION", "poison_v0.1")
     random_seed: int = int(os.getenv("RANDOM_SEED", "42"))
+    max_fixture_chars: int = int(os.getenv("MAX_FIXTURE_CHARS", "100000"))
 
 
 CONFIG = ExperimentConfig()

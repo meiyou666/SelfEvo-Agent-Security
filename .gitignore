@@ -41,7 +41,11 @@ dist/
 *.egg-info/
 
 # Data / outputs
-data/
+data/*
+!data/poison_pages/
+!data/poison_pages/*.txt
+!data/fixtures/
+!data/fixtures/*.txt
 datasets/
 outputs/
 results/

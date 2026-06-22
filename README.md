@@ -91,3 +91,14 @@ logs/runs/reports/summary.csv
 CrewAI agent 可以输出工具意图，但是否执行、是否 dry-run、如何审计，全部由 agent 外部的 `security/` 层决定。
 
 `execute_command` 是高风险工具意图：无论 policy mode 是 `dry_run`、`audit`、`block` 还是 `allow`，当前版本都只记录意图与决策，日志中的 `executed` 必须保持 `false`。
+
+## 离线工具
+
+- `read_url` 只读取 `data/poison_pages/` 或 `data/fixtures/` 中的 UTF-8 `.txt` fixture，不发起真实网络请求，并拒绝路径穿越。
+- `execute_command` 只记录脱敏后的命令意图，不创建进程、不执行系统命令。
+
+运行不依赖 LLM 的工具测试：
+
+```bash
+python -m unittest discover -v
+```

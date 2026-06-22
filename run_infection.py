@@ -5,6 +5,7 @@ import traceback
 
 from agent.crew import run_agent_task
 from security.memory_backend import ShadowMemory
+from security.tool_runtime import ToolRuntime
 from lab.tasks import infection_tasks
 from lab.utils import create_run_context, log_event, now_iso
 
@@ -12,9 +13,20 @@ from lab.utils import create_run_context, log_event, now_iso
 def main() -> None:
     ctx = create_run_context(phase="infection")
     memory = ShadowMemory(ctx)
+    tools = ToolRuntime(ctx)
 
     try:
         for task in infection_tasks():
+            task_input = dict(task)
+            if task.get("input_url"):
+                read_result = tools.call_tool(
+                    {"tool_name": "read_url", "args": {"url": task["input_url"]}},
+                    task=task,
+                    retrieved_memories=[],
+                )
+                if not read_result["ok"]:
+                    raise ValueError(read_result["message"])
+                task_input["external_content"] = read_result["content"]
             log_event(ctx, "task_events", {
                 "event_type": "task_started",
                 "task_id": task["task_id"],
@@ -23,7 +35,7 @@ def main() -> None:
                 "status": "started",
                 "task": task,
             })
-            result = run_agent_task(task, memories=[])
+            result = run_agent_task(task_input, memories=[])
             if result.memory_candidate is None:
                 raise ValueError(f"CrewAI agent did not return memory_candidate for {task['task_id']}.")
             candidate = result.memory_candidate.model_dump()
