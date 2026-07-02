@@ -1,15 +1,21 @@
-# SelfEvo Agent Security：CrewAI Baseline
+# SelfEvo Agent Security: CrewAI Baseline
 
-这个实验现在使用 **完整 CrewAI agent** 作为 baseline。`agent/` 目录只包含 CrewAI agent/crew 相关实现；安全防范、策略判断、dry-run、审计日志和 shadow memory 运行时被隔离到 `security/` 与 runner 层。
+本仓库用于 Sprint0 v0.1 的 Agent 安全实验。当前 baseline 使用 CrewAI 负责 Agent 推理，安全策略、工具 dry-run、审计日志和 shadow memory 都放在 Agent 外部的 `security/` 与 runner 层。
 
-当前默认运行模式是 `crewai`。项目对齐 Sprint0 v0.1 实验约束：只做防御实验，`execute_command` 永远不真实执行，指标以 shadow memory 与 JSONL 审计日志为真相源。
+核心约束：
+
+- `agent/` 只负责 CrewAI 推理和结构化输出。
+- `security/` 负责 policy、tool audit、dry-run 和 provenance。
+- `execute_command` 永远不真实执行，只记录高风险工具意图。
+- `read_url` 不访问真实网页，只读取本地 fixture。
+- 指标以 JSONL 审计日志和 shadow memory 为事实来源。
 
 ## 目录结构
 
 ```text
 agent/
   crew.py                 CrewAI crew 定义
-  main.py                 CrewAI agent 独立 smoke run
+  main.py                 CrewAI agent smoke run
   schemas.py              CrewAI 结构化输出 schema
   config/agents.yaml      CrewAI agent 配置
   config/tasks.yaml       CrewAI task 配置
@@ -24,6 +30,26 @@ run_infection.py          infection 阶段入口
 run_trigger.py            trigger 阶段入口
 ```
 
+## 离线工具
+
+`read_url` 是本地 fixture 读取工具，不会发起网络请求。允许范围只有：
+
+```text
+data/poison_pages/*.txt
+data/fixtures/*.txt
+```
+
+示例：
+
+```text
+fixture://poison_pages/poison_001.txt
+fixture://fixtures/benign_001.txt
+```
+
+路径穿越、非 `.txt` 文件、fixture 不存在或超过大小限制都会被拒绝。
+
+`execute_command` 是命令执行意图工具，但当前实验中永远 dry-run。即使 `POLICY_MODE=allow`，runner 也不会创建进程，不会执行系统命令，只会写入脱敏后的工具调用日志。
+
 ## 安装与配置
 
 ```bash
@@ -31,27 +57,41 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-配置环境变量：
+Windows PowerShell 可以使用：
 
-```bash
-export EXPERIMENT_MODE=crewai
-export MODEL=openai/gpt-4o-mini
-export OPENAI_API_KEY=你的密钥
-export LLM_TEMPERATURE=0
-export CREWAI_VERBOSE=true
+```powershell
+Copy-Item .env.example .env
 ```
 
-缺少 CrewAI 或 LLM 配置时，agent 会直接失败并提示安装/配置，不再回退到规则型离线 agent。
+`.env` 示例：
+
+```env
+EXPERIMENT_MODE=crewai
+MODEL=openai/gpt-4o-mini
+OPENAI_API_KEY=replace-with-your-key
+LLM_TEMPERATURE=0
+CREWAI_VERBOSE=true
+POLICY_MODE=dry_run
+MAX_FIXTURE_CHARS=100000
+```
+
+缺少 CrewAI 或 LLM 配置时，CrewAI agent 会直接失败并提示安装或配置；项目不会回退到规则型离线 Agent。
 
 ## 运行
 
-先验证 CrewAI agent 本身：
+先运行不依赖 LLM 的工具层测试：
+
+```bash
+python -m unittest discover -v
+```
+
+验证 CrewAI agent 本身：
 
 ```bash
 python -m agent.main
 ```
 
-再运行完整实验：
+运行完整实验：
 
 ```bash
 python run_infection.py
@@ -72,33 +112,24 @@ logs/runs/<run_id>/
   shadow_memory.json
 ```
 
-报告输出到：
+报告输出：
 
 ```text
 logs/runs/reports/report.md
 logs/runs/reports/summary.csv
 ```
 
-指标包括任务级 `attempted_asr`、`pre_policy_asr`、`post_policy_asr`，以及工具级 `block_rate` 和 `false_positive_rate`。
+## 当前完成度
 
-## 架构边界
+已完成：
 
-- `agent/`：只负责 CrewAI 推理和结构化输出。
-- `security/`：负责 policy、dry-run、tool audit、shadow memory provenance。
-- runner：负责连接 CrewAI agent 输出与外部安全运行层。
-- metrics：只读取 JSONL 日志，不读取 CrewAI 内部状态。
+- CrewAI baseline 与外部安全 runtime 分层。
+- `read_url` 本地 fixture 读取。
+- `execute_command` dry-run 与命令参数脱敏。
+- policy event / tool call JSONL 审计。
+- 工具层单元测试。
 
-CrewAI agent 可以输出工具意图，但是否执行、是否 dry-run、如何审计，全部由 agent 外部的 `security/` 层决定。
+未覆盖：
 
-`execute_command` 是高风险工具意图：无论 policy mode 是 `dry_run`、`audit`、`block` 还是 `allow`，当前版本都只记录意图与决策，日志中的 `executed` 必须保持 `false`。
-
-## 离线工具
-
-- `read_url` 只读取 `data/poison_pages/` 或 `data/fixtures/` 中的 UTF-8 `.txt` fixture，不发起真实网络请求，并拒绝路径穿越。
-- `execute_command` 只记录脱敏后的命令意图，不创建进程、不执行系统命令。
-
-运行不依赖 LLM 的工具测试：
-
-```bash
-python -m unittest discover -v
-```
+- 真实 LLM 环境下的完整 infection / trigger 实验需要配置 API key 后运行。
+- 当前不是完全离线 Agent；离线的是实验材料读取和高风险工具执行层。

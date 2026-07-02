@@ -48,6 +48,16 @@ class ToolRuntimeTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertFalse(result["executed"])
 
+    def test_read_url_rejects_missing_fixture(self) -> None:
+        result = self.runtime.call_tool(
+            {"tool_name": "read_url", "args": {"url": "fixture://fixtures/missing.txt"}},
+            self.task,
+            [],
+        )
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["executed"])
+        self.assertIn("Fixture not found", result["message"])
+
     def test_execute_command_is_dry_run_and_redacted(self) -> None:
         result = self.runtime.call_tool(
             {"tool_name": "execute_command", "args": {"command": "create-real-side-effect"}},
@@ -67,6 +77,19 @@ class ToolRuntimeTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 decision = policy_check(call, self.task, [], mode)
                 self.assertFalse(decision["executed"])
+
+    def test_unknown_tool_is_logged_without_execution(self) -> None:
+        result = self.runtime.call_tool(
+            {"tool_name": "unknown_tool", "args": {}},
+            self.task,
+            [],
+        )
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["executed"])
+        event = read_jsonl(self.ctx.run_dir / "tool_calls.jsonl")[-1]
+        self.assertEqual("unknown_tool", event["tool_name"])
+        self.assertFalse(event["executed"])
+        self.assertIn("Unknown tool", event["result_summary"])
 
 
 if __name__ == "__main__":
