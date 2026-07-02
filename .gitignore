@@ -65,3 +65,5 @@ checkpoints/
 tmp/
 temp/
 .cache/
+.crewai_storage/
+.crewai_localappdata/

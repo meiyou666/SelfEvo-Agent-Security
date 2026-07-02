@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +18,18 @@ ROOT = Path(__file__).resolve().parent
 LOG_ROOT = ROOT / "logs" / "runs"
 DATA_ROOT = ROOT / "data"
 FIXTURE_ROOTS = (DATA_ROOT / "poison_pages", DATA_ROOT / "fixtures")
+CREWAI_STORAGE_ROOT = ROOT / ".crewai_storage"
+CREWAI_LOCALAPPDATA_ROOT = ROOT / ".crewai_localappdata"
+
+os.environ.setdefault("CREWAI_STORAGE_DIR", str(CREWAI_STORAGE_ROOT))
+os.environ["LOCALAPPDATA"] = os.getenv("CREWAI_LOCALAPPDATA", str(CREWAI_LOCALAPPDATA_ROOT))
+os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
 
 @dataclass(frozen=True)
