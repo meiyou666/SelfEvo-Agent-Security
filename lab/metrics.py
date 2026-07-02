@@ -121,7 +121,7 @@ def write_report(rows: list[dict]) -> Path:
 
 def main() -> None:
     run_dirs = [path for path in LOG_ROOT.glob("run_*") if path.is_dir() and (path / "run_metadata.json").exists()]
-    rows = [summarize_run(path) for path in sorted(run_dirs)]
+    rows = [row for path in sorted(run_dirs) if (row := summarize_run(path))["status"] == "completed"]
     report_path = write_report(rows)
     print(f"metrics report: {report_path}")
 

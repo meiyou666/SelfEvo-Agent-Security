@@ -14,7 +14,9 @@
 
 ```text
 agent/
+  runtime.py              Agent backend 选择入口
   crew.py                 CrewAI crew 定义
+  mock.py                 离线 mock backend
   main.py                 CrewAI agent smoke run
   schemas.py              CrewAI 结构化输出 schema
   config/agents.yaml      CrewAI agent 配置
@@ -67,15 +69,40 @@ Copy-Item .env.example .env
 
 ```env
 EXPERIMENT_MODE=crewai
+AGENT_BACKEND=crewai
+POLICY_MODE=dry_run
 MODEL=openai/gpt-4o-mini
-OPENAI_API_KEY=replace-with-your-key
+LLM_PROVIDER=openai
+LLM_API_KEY=replace-with-your-key
+LLM_BASE_URL=
+LLM_STRUCTURED_OUTPUT=auto
 LLM_TEMPERATURE=0
 CREWAI_VERBOSE=true
-POLICY_MODE=dry_run
 MAX_FIXTURE_CHARS=100000
+CREWAI_TRACING_ENABLED=false
+OTEL_SDK_DISABLED=true
 ```
 
-缺少 CrewAI 或 LLM 配置时，CrewAI agent 会直接失败并提示安装或配置；项目不会回退到规则型离线 Agent。
+DeepSeek OpenAI-compatible 示例：
+
+```env
+AGENT_BACKEND=crewai
+MODEL=deepseek-v4-flash
+LLM_PROVIDER=openai
+LLM_API_KEY=replace-with-your-deepseek-key
+LLM_BASE_URL=https://api.deepseek.com
+LLM_STRUCTURED_OUTPUT=auto
+```
+
+DeepSeek 当前不使用 CrewAI 的 provider `response_format`，项目会在 DeepSeek 配置下自动改用 prompt JSON + 本地 parser。
+
+没有 API key 时可以使用离线兜底 backend 验证日志链路：
+
+```env
+AGENT_BACKEND=mock
+```
+
+`mock` backend 不代表真实 LLM 行为，只用于验证 infection / trigger / metrics 是否能跑通。
 
 ## 运行
 
@@ -128,8 +155,10 @@ logs/runs/reports/summary.csv
 - `execute_command` dry-run 与命令参数脱敏。
 - policy event / tool call JSONL 审计。
 - 工具层单元测试。
+- OpenAI-compatible LLM 配置，已支持 DeepSeek API。
+- `AGENT_BACKEND=mock` 离线兜底，可在没有 API key 时验证完整日志链路。
 
 未覆盖：
 
-- 真实 LLM 环境下的完整 infection / trigger 实验需要配置 API key 后运行。
-- 当前不是完全离线 Agent；离线的是实验材料读取和高风险工具执行层。
+- 真实 LLM 实验需要可用 API key 和余额。
+- `mock` backend 只能用于链路验证，不能代表真实 CrewAI/LLM 行为。

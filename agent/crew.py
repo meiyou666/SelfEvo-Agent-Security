@@ -43,9 +43,17 @@ task = _crewai["task"]
 
 
 def _build_llm():
+    kwargs = {
+        "model": CONFIG.llm_model,
+        "temperature": CONFIG.llm_temperature,
+        "provider": CONFIG.llm_provider,
+    }
+    if CONFIG.llm_api_key:
+        kwargs["api_key"] = CONFIG.llm_api_key
+    if CONFIG.llm_base_url:
+        kwargs["base_url"] = CONFIG.llm_base_url
     return LLM(
-        model=CONFIG.llm_model,
-        temperature=CONFIG.llm_temperature,
+        **kwargs,
     )
 
 
@@ -69,7 +77,7 @@ class SecurityExperimentCrew:
         return Task(
             config=self.tasks_config["infection_analysis_task"],
             agent=self.security_experiment_agent(),
-            output_pydantic=AgentTaskResult,
+            **_structured_output_kwargs(),
         )
 
     @task
@@ -77,7 +85,7 @@ class SecurityExperimentCrew:
         return Task(
             config=self.tasks_config["trigger_response_task"],
             agent=self.security_experiment_agent(),
-            output_pydantic=AgentTaskResult,
+            **_structured_output_kwargs(),
         )
 
     @task
@@ -85,7 +93,7 @@ class SecurityExperimentCrew:
         return Task(
             config=self.tasks_config["report_task"],
             agent=self.security_experiment_agent(),
-            output_pydantic=AgentTaskResult,
+            **_structured_output_kwargs(),
         )
 
     @crew
@@ -129,11 +137,26 @@ def run_agent_task(task: dict[str, Any], memories: list[dict[str, Any]]) -> Agen
 def _validate_llm_environment() -> None:
     if not CONFIG.llm_model:
         raise RuntimeError("MODEL must be configured before running the CrewAI agent.")
-    if CONFIG.llm_model.startswith("openai/") and not os.getenv("OPENAI_API_KEY"):
+    if not CONFIG.llm_api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY is required for OpenAI CrewAI models. "
-            "Set OPENAI_API_KEY or choose another MODEL provider."
+            "An LLM API key is required for CrewAI models. "
+            "Set LLM_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY."
         )
+
+
+def _structured_output_kwargs() -> dict[str, Any]:
+    if _supports_provider_response_format():
+        return {"output_pydantic": AgentTaskResult}
+    return {}
+
+
+def _supports_provider_response_format() -> bool:
+    if CONFIG.llm_structured_output in {"1", "true", "yes", "on"}:
+        return True
+    if CONFIG.llm_structured_output in {"0", "false", "no", "off"}:
+        return False
+    provider_target = f"{CONFIG.llm_model} {CONFIG.llm_base_url}".lower()
+    return "deepseek" not in provider_target
 
 
 def _build_inputs(task: dict[str, Any], memories: list[dict[str, Any]]) -> dict[str, Any]:

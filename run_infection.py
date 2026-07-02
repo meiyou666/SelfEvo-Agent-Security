@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import traceback
 
-from agent.crew import run_agent_task
+from agent.runtime import run_agent_task
 from security.memory_backend import ShadowMemory
 from security.tool_runtime import ToolRuntime
 from lab.tasks import infection_tasks

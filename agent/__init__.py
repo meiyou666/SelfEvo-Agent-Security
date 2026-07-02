@@ -11,10 +11,14 @@ __all__ = [
 
 def __getattr__(name: str):
     """Load optional CrewAI dependencies only when agent APIs are requested."""
-    if name in {"SecurityExperimentCrew", "run_agent_task"}:
-        from agent.crew import SecurityExperimentCrew, run_agent_task
+    if name == "run_agent_task":
+        from agent.runtime import run_agent_task
 
-        return {"SecurityExperimentCrew": SecurityExperimentCrew, "run_agent_task": run_agent_task}[name]
+        return run_agent_task
+    if name == "SecurityExperimentCrew":
+        from agent.crew import SecurityExperimentCrew
+
+        return SecurityExperimentCrew
     if name in {"AgentTaskResult", "MemoryCandidate", "ToolCallIntent"}:
         from agent.schemas import AgentTaskResult, MemoryCandidate, ToolCallIntent
 

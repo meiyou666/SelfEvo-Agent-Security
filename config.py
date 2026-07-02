@@ -42,6 +42,10 @@ class ExperimentConfig:
     run_id_prefix: str = "run"
     agent_backend: str = os.getenv("AGENT_BACKEND", "crewai")
     llm_model: str = os.getenv("MODEL", "openai/gpt-4o-mini")
+    llm_api_key: str = os.getenv("LLM_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+    llm_base_url: str = os.getenv("LLM_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or os.getenv("OPENAI_BASE_URL", "")
+    llm_provider: str = os.getenv("LLM_PROVIDER", "openai")
+    llm_structured_output: str = os.getenv("LLM_STRUCTURED_OUTPUT", "auto").lower()
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.0"))
     crewai_verbose: bool = os.getenv("CREWAI_VERBOSE", "true").lower() in {"1", "true", "yes", "on"}
     task_set_version: str = os.getenv("TASK_SET_VERSION", "tasks_v0.1")

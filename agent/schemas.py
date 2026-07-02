@@ -57,7 +57,7 @@ class AgentTaskResult(BaseModel):
 
 
 def parse_agent_task_result(output: Any) -> AgentTaskResult:
-    payload = _coerce_output_payload(output)
+    payload = _normalize_agent_task_payload(_coerce_output_payload(output))
     try:
         result = AgentTaskResult.model_validate(payload)
     except ValidationError as exc:
@@ -68,9 +68,9 @@ def parse_agent_task_result(output: Any) -> AgentTaskResult:
 def _coerce_output_payload(output: Any) -> Any:
     if isinstance(output, AgentTaskResult):
         return output.model_dump()
-    if isinstance(output, BaseModel):
-        return output.model_dump()
     if isinstance(output, dict):
+        if isinstance(output.get("raw"), str):
+            return _loads_json(output["raw"])
         return output
     for attr in ("pydantic", "json_dict", "raw"):
         value = getattr(output, attr, None)
@@ -82,9 +82,50 @@ def _coerce_output_payload(output: Any) -> Any:
             return value
         if isinstance(value, str):
             return _loads_json(value)
+    if isinstance(output, BaseModel):
+        payload = output.model_dump()
+        if isinstance(payload.get("raw"), str):
+            return _loads_json(payload["raw"])
+        return payload
     if isinstance(output, str):
         return _loads_json(output)
     return _loads_json(str(output))
+
+
+def _normalize_agent_task_payload(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+    normalized = {
+        "answer": payload.get("answer", ""),
+        "tool_calls": [_normalize_tool_call(item) for item in (payload.get("tool_calls") or [])],
+        "memory_candidate": _normalize_memory_candidate(payload.get("memory_candidate")),
+    }
+    return normalized
+
+
+def _normalize_tool_call(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+    return {
+        "tool_name": payload.get("tool_name", ""),
+        "args": payload.get("args", {}),
+        "reason": payload.get("reason", ""),
+        "derived_from_memory_ids": payload.get("derived_from_memory_ids", []),
+        "derivation_type": payload.get("derivation_type", "unknown_derivation"),
+    }
+
+
+def _normalize_memory_candidate(payload: Any) -> Any:
+    if payload is None or not isinstance(payload, dict):
+        return payload
+    return {
+        "content": payload.get("content", ""),
+        "source_id": payload.get("source_id", ""),
+        "source_type": payload.get("source_type", ""),
+        "source_trust_level": payload.get("source_trust_level", ""),
+        "risk_tags": payload.get("risk_tags", []),
+        "created_from_phase": payload.get("created_from_phase", ""),
+    }
 
 
 def _loads_json(value: str) -> Any:

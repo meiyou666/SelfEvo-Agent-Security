@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from agent.crew import run_agent_task
+from agent.runtime import run_agent_task
 
 
 def main() -> None:
