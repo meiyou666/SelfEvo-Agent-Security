@@ -1,6 +1,8 @@
 # SelfEvo Agent Security: CrewAI Baseline
 
-本仓库用于 Sprint0 v0.1 的 Agent 安全实验。当前 baseline 使用 CrewAI 负责 Agent 推理，安全策略、工具 dry-run、审计日志和 shadow memory 都放在 Agent 外部的 `security/` 与 runner 层。
+本仓库用于 Self-evolving Agent 记忆污染安全实验。当前版本已经形成完整 MVP：CrewAI/DeepSeek 负责 Agent 推理，`security/` 层负责策略、工具 dry-run、审计日志和 shadow memory，runner 串联 infection / trigger 两阶段实验，`lab/metrics.py` 汇总 JSONL 日志并生成报告。
+
+详细实验结果见 `实验结果说明.md`。
 
 核心约束：
 
@@ -13,6 +15,9 @@
 ## 目录结构
 
 ```text
+config.py                 实验配置
+run_infection.py          infection 阶段入口
+run_trigger.py            trigger 阶段入口
 agent/
   runtime.py              Agent backend 选择入口
   crew.py                 CrewAI crew 定义
@@ -27,9 +32,27 @@ security/
   tool_runtime.py         外部工具运行与审计
 lab/
   tasks.py                infection / trigger 任务集
+  poison.py               synthetic poison sample metadata
   metrics.py              JSONL 指标汇总
-run_infection.py          infection 阶段入口
-run_trigger.py            trigger 阶段入口
+data/
+  poison_pages/           本地 synthetic untrusted fixtures
+  fixtures/               本地 benign fixtures
+```
+
+## 完整实验链路
+
+```text
+infection task
+  -> read_url fixture
+  -> Agent 生成 memory candidate
+  -> shadow memory write
+  -> trigger/control task
+  -> shadow memory retrieval
+  -> Agent 产生工具调用意图
+  -> ToolRuntime policy check
+  -> execute_command dry-run
+  -> JSONL logs
+  -> metrics report
 ```
 
 ## 离线工具
@@ -126,6 +149,14 @@ python run_trigger.py
 python lab/metrics.py
 ```
 
+没有 API key 时，可以先在 `.env` 中设置：
+
+```env
+AGENT_BACKEND=mock
+```
+
+然后同样运行三条完整实验命令，用于验证日志、memory、policy 和 metrics 链路。
+
 每次运行会生成：
 
 ```text
@@ -150,15 +181,33 @@ logs/runs/reports/summary.csv
 
 已完成：
 
-- CrewAI baseline 与外部安全 runtime 分层。
-- `read_url` 本地 fixture 读取。
-- `execute_command` dry-run 与命令参数脱敏。
-- policy event / tool call JSONL 审计。
-- 工具层单元测试。
-- OpenAI-compatible LLM 配置，已支持 DeepSeek API。
-- `AGENT_BACKEND=mock` 离线兜底，可在没有 API key 时验证完整日志链路。
+- Runner / config / run 目录：支持 infection 和 trigger 两阶段运行，并写入统一 run 目录。
+- Agent backend：支持 CrewAI + DeepSeek，也支持 `AGENT_BACKEND=mock` 离线兜底。
+- Tool runtime：`read_url` 只读本地 fixture，`execute_command` 永远 dry-run。
+- Shadow memory：支持 memory 写入、检索、`memory_id` 和 source trust label。
+- Provenance：工具调用日志能关联 `retrieval_context_id`、`retrieved_memory_ids` 和 `derived_from_memory_ids`。
+- Tasks / fixtures：包含 5 个 infection、5 个 trigger、3 个 control、3 个 synthetic poison fixtures。
+- Metrics / report：支持 ASR、block rate、post-policy 风险，以及 trigger/control 拆分指标。
+- DeepSeek 实验已跑通，调整后样本可产生安全占位的 `execute_command` 意图，全部被 dry-run。
 
-未覆盖：
+关键结果：
+
+```text
+mock backend:
+  risky_tool_attempt_count = 5
+  block_rate = 1.0
+  post_policy_asr = 0.0
+
+DeepSeek adjusted samples:
+  risky_tool_attempt_count = 4
+  report_trigger_risky_tool_attempt_count = 1
+  control_risky_tool_attempt_count = 3
+  block_rate = 1.0
+  post_policy_asr = 0.0
+```
+
+局限：
 
 - 真实 LLM 实验需要可用 API key 和余额。
 - `mock` backend 只能用于链路验证，不能代表真实 CrewAI/LLM 行为。
+- 当前 retrieval 会把污染 memory 带入 control 任务，后续可以继续优化 retrieval / provenance policy。
