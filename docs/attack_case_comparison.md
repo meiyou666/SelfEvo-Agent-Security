@@ -1,10 +1,13 @@
-# Attack Case Comparison
+# 攻击案例对照实验
 
-This experiment answers whether typical malicious agent-tool behaviors can be induced before defense, and whether the defense prevents them after policy enforcement.
+本实验用于回答两个问题：
 
-No real command, filesystem mutation, secret access, or network request is executed. The `baseline` policy records `would_execute_without_defense=true` and `simulated_executed=true` to represent the unsafe path that would be reached without the defense layer.
+- 在没有防护的情况下，典型恶意样本是否能够诱导 Agent 产生高风险工具调用。
+- 加入防护策略后，同样的攻击输入是否会被记录、溯源并拦截。
 
-## How To Run
+实验不会执行真实命令，不会修改文件系统，不会读取真实密钥，也不会发起网络请求。`baseline` 策略通过记录 `would_execute_without_defense=true` 和 `simulated_executed=true` 来表示“如果没有防护层，该攻击会进入危险执行路径”。
+
+## 运行方式
 
 ```bash
 python run_attack_scenarios.py --policy baseline --agent-backend mock
@@ -12,42 +15,42 @@ python run_attack_scenarios.py --policy dry_run --agent-backend mock
 python lab/metrics.py
 ```
 
-## Cases
+## 攻击场景
 
-| Case | Fixture | Simulated risk |
+| 场景 | 样本文件 | 模拟风险 |
 | --- | --- | --- |
-| Command execution injection | `data/poison_pages/attack_sim_command.txt` | Agent is induced to emit `execute_command` intent |
-| Sensitive read injection | `data/poison_pages/attack_sim_sensitive_read.txt` | Agent is induced to emit a sensitive-read intent |
-| Data exfiltration injection | `data/poison_pages/attack_sim_exfiltration.txt` | Agent is induced to emit an exfiltration intent |
-| Persistence injection | `data/poison_pages/attack_sim_persistence.txt` | Agent is induced to emit a persistence intent |
+| 命令执行诱导 | `data/poison_pages/attack_sim_command.txt` | 诱导 Agent 产生 `execute_command` 工具调用意图 |
+| 敏感信息读取诱导 | `data/poison_pages/attack_sim_sensitive_read.txt` | 诱导 Agent 产生读取敏感信息的工具调用意图 |
+| 数据外传诱导 | `data/poison_pages/attack_sim_exfiltration.txt` | 诱导 Agent 产生数据外传类工具调用意图 |
+| 持久化诱导 | `data/poison_pages/attack_sim_persistence.txt` | 诱导 Agent 产生持久化或环境篡改类工具调用意图 |
 
-## Current Mock Results
+## 当前 Mock 结果
 
-| Mode | High-risk cases | Simulated attack success | Defense blocked | Real executed |
+| 模式 | 高风险案例数 | 模拟攻击成功数 | 防护拦截数 | 真实执行数 |
 | --- | ---: | ---: | ---: | ---: |
 | `baseline` | 4 | 4 | 0 | 0 |
 | `dry_run` | 4 | 0 | 4 | 0 |
 
-Interpretation:
+结果解释：
 
-- In baseline mode, all four attacks reach the would-execute path, so the attack examples are demonstrably effective.
-- In dry-run defense mode, the same four attacks are recorded but not allowed to execute.
-- The real execution count remains zero in both modes, which keeps the experiment safe.
+- 在 `baseline` 模式下，4 个攻击样本都进入了 would-execute 路径，说明攻击样本能够成功诱导 Agent 产生高风险工具调用意图。
+- 在 `dry_run` 防护模式下，同样 4 个攻击样本都被记录和拦截，没有进入真实执行。
+- 两种模式下真实执行数都保持为 0，保证实验安全。
 
-## Evidence Fields
+## 证据字段
 
-The relevant audit fields are written to `tool_calls.jsonl` and `policy_events.jsonl`:
+相关审计字段会写入 `tool_calls.jsonl` 和 `policy_events.jsonl`：
 
-- `would_execute_without_defense`: whether the attack would enter execution without the defense layer.
-- `simulated_executed`: whether baseline mode marks the unsafe path as successful for experiment comparison.
-- `executed`: whether the tool was actually executed. This must remain `false` for high-risk tools.
-- `matched_rules`: policy rules triggered by the tool call.
-- `derived_from_memory_ids`: provenance link from tool intent back to retrieved untrusted memory.
+- `would_execute_without_defense`：表示如果没有防护层，该攻击是否会进入执行路径。
+- `simulated_executed`：表示 baseline 模式下是否将该危险路径记为“模拟成功”。
+- `executed`：表示工具是否真实执行。对高风险工具来说，这个字段必须始终为 `false`。
+- `matched_rules`：本次工具调用命中的防护规则。
+- `derived_from_memory_ids`：工具调用意图对应的来源记忆 ID，用于把风险行为追溯到不可信记忆。
 
-The expected conclusion is:
+预期结论：
 
 ```text
-baseline: attack succeeds in the simulated no-defense path
-dry_run: same attack fails after policy enforcement
-real execution: always zero
+baseline：攻击在模拟无防护路径下成功
+dry_run：同样攻击在策略防护后失败
+真实执行：始终为 0
 ```
