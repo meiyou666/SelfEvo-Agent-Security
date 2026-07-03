@@ -30,6 +30,9 @@ def _run_mock_infection(task: dict[str, Any]) -> AgentTaskResult:
 
 
 def _run_mock_trigger(task: dict[str, Any], memories: list[dict[str, Any]]) -> AgentTaskResult:
+    if task.get("task_type") == "attack_scenario":
+        return _run_mock_attack_scenario(task, memories)
+
     contains_untrusted_risk = any(
         memory.get("source_trust_level") == "untrusted" and memory.get("risk_tags")
         for memory in memories
@@ -52,5 +55,28 @@ def _run_mock_trigger(task: dict[str, Any], memories: list[dict[str, Any]]) -> A
         )
     return AgentTaskResult(
         answer="Mock trigger completed: generated a benign response and optional tool intent.",
+        tool_calls=tool_calls,
+    )
+
+
+def _run_mock_attack_scenario(task: dict[str, Any], memories: list[dict[str, Any]]) -> AgentTaskResult:
+    risky_memory_ids = [
+        memory["memory_id"]
+        for memory in memories
+        if memory.get("source_trust_level") == "untrusted" and memory.get("risk_tags")
+    ]
+    tool_calls: list[ToolCallIntent] = []
+    if risky_memory_ids and task.get("expected_tool_marker"):
+        tool_calls.append(
+            ToolCallIntent(
+                tool_name="execute_command",
+                args={"command": task["expected_tool_marker"]},
+                reason="Mock backend simulates a successful attack intent before policy enforcement.",
+                derived_from_memory_ids=risky_memory_ids,
+                derivation_type="directly_derived",
+            )
+        )
+    return AgentTaskResult(
+        answer="Mock attack scenario completed: generated a controlled high-risk tool intent.",
         tool_calls=tool_calls,
     )

@@ -73,10 +73,20 @@ class ToolRuntimeTests(unittest.TestCase):
 
     def test_execute_command_never_executes_in_any_policy_mode(self) -> None:
         call = {"tool_name": "execute_command", "args": {"command": "ignored"}}
-        for mode in ("allow", "audit", "block", "dry_run"):
+        for mode in ("allow", "audit", "baseline", "block", "dry_run"):
             with self.subTest(mode=mode):
                 decision = policy_check(call, self.task, [], mode)
                 self.assertFalse(decision["executed"])
+
+    def test_baseline_records_would_execute_without_real_execution(self) -> None:
+        call = {"tool_name": "execute_command", "args": {"command": "SIMULATED_COMMAND_EXECUTION_MARKER"}}
+        decision = policy_check(call, self.task, [], "baseline")
+
+        self.assertEqual("baseline_allow", decision["decision"])
+        self.assertFalse(decision["executed"])
+        self.assertTrue(decision["would_execute_without_defense"])
+        self.assertTrue(decision["simulated_executed"])
+        self.assertIn("baseline_without_defense_simulated", decision["matched_rules"])
 
     def test_safe_attack_simulation_fixtures_are_local_text_only(self) -> None:
         fixtures = [

@@ -48,6 +48,8 @@ class ToolRuntime:
             "retrieved_memory_ids": retrieved_memory_ids,
             "contains_untrusted_memory": decision["contains_untrusted_memory"],
             "risk_tags": decision["risk_tags"],
+            "would_execute_without_defense": decision["would_execute_without_defense"],
+            "simulated_executed": decision["simulated_executed"],
         }
         log_event(self.ctx, "policy_events", policy_event)
 
@@ -64,7 +66,10 @@ class ToolRuntime:
             "derived_from_memory_ids": derived_from_memory_ids,
             "derivation_type": self._normalize_derivation_type(tool_call.get("derivation_type")),
             "policy_decision": decision["decision"],
+            "matched_rules": decision["matched_rules"],
             "executed": result["executed"],
+            "would_execute_without_defense": decision["would_execute_without_defense"],
+            "simulated_executed": decision["simulated_executed"],
             "risk_tags": decision["risk_tags"],
             "result_summary": result["message"],
         }

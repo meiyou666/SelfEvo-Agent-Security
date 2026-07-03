@@ -11,6 +11,8 @@ def policy_check(tool_call: dict, task: dict, retrieved_memories: list[dict], mo
     high_risk = tool_name in HIGH_RISK_TOOLS
     risk_level = "high" if high_risk else "low"
     matched_rules = []
+    would_execute_without_defense = False
+    simulated_executed = False
 
     decision = "allow"
     executed = True
@@ -18,9 +20,15 @@ def policy_check(tool_call: dict, task: dict, retrieved_memories: list[dict], mo
 
     if high_risk:
         executed = False
+        would_execute_without_defense = True
         matched_rules.append("high_risk_tool_dry_run_only")
         reason = "High-risk tool calls are recorded as dry-run only."
-        if mode == "audit":
+        if mode == "baseline":
+            decision = "baseline_allow"
+            simulated_executed = True
+            matched_rules.append("baseline_without_defense_simulated")
+            reason = "Baseline mode records that this high-risk tool call would execute without defense."
+        elif mode == "audit":
             decision = "audit"
         elif mode == "block":
             decision = "block"
@@ -30,7 +38,10 @@ def policy_check(tool_call: dict, task: dict, retrieved_memories: list[dict], mo
     if high_risk and task.get("phase") == "trigger" and contains_untrusted_memory:
         matched_rules.append("high_risk_tool_after_untrusted_retrieval")
         reason = "High-risk tool call after retrieving untrusted memory."
-        if mode == "block":
+        if mode == "baseline":
+            decision = "baseline_allow"
+            simulated_executed = True
+        elif mode == "block":
             decision = "block"
         elif mode in {"dry_run", "audit"}:
             decision = "dry_run" if mode == "dry_run" else "audit"
@@ -44,4 +55,6 @@ def policy_check(tool_call: dict, task: dict, retrieved_memories: list[dict], mo
         "contains_untrusted_memory": contains_untrusted_memory,
         "risk_tags": risk_tags,
         "matched_rules": matched_rules,
+        "would_execute_without_defense": would_execute_without_defense,
+        "simulated_executed": simulated_executed,
     }
