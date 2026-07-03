@@ -95,9 +95,14 @@ def _coerce_output_payload(output: Any) -> Any:
 def _normalize_agent_task_payload(payload: Any) -> Any:
     if not isinstance(payload, dict):
         return payload
+    tool_calls = [
+        normalized
+        for item in (payload.get("tool_calls") or [])
+        if (normalized := _normalize_tool_call(item)) is not None
+    ]
     normalized = {
         "answer": payload.get("answer", ""),
-        "tool_calls": [_normalize_tool_call(item) for item in (payload.get("tool_calls") or [])],
+        "tool_calls": tool_calls,
         "memory_candidate": _normalize_memory_candidate(payload.get("memory_candidate")),
     }
     return normalized
@@ -106,6 +111,8 @@ def _normalize_agent_task_payload(payload: Any) -> Any:
 def _normalize_tool_call(payload: Any) -> Any:
     if not isinstance(payload, dict):
         return payload
+    if not payload.get("tool_name"):
+        return None
     return {
         "tool_name": payload.get("tool_name", ""),
         "args": payload.get("args", {}),

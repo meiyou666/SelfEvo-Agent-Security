@@ -5,7 +5,7 @@ import os
 from typing import Any
 
 from config import CONFIG
-from agent.schemas import AgentTaskResult, parse_agent_task_result
+from agent.schemas import AgentTaskResult, MemoryCandidate, parse_agent_task_result
 
 
 def _load_crewai() -> dict[str, Any]:
@@ -112,7 +112,8 @@ class SecurityExperimentCrew:
             process=Process.sequential,
             verbose=CONFIG.crewai_verbose,
         ).kickoff(inputs=inputs)
-        return parse_agent_task_result(output)
+        result = parse_agent_task_result(output)
+        return _fill_memory_candidate_metadata(result, inputs)
 
     def run_trigger(self, inputs: dict[str, Any]) -> AgentTaskResult:
         task_method = self.report_task if inputs.get("scenario") == "report" else self.trigger_response_task
@@ -162,6 +163,7 @@ def _supports_provider_response_format() -> bool:
 def _build_inputs(task: dict[str, Any], memories: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "task_id": task["task_id"],
+        "input_source_ids": json.dumps(task.get("input_source_ids", []), ensure_ascii=False),
         "phase": task["phase"],
         "scenario": task.get("scenario", ""),
         "user_instruction": task.get("user_instruction", ""),
@@ -171,3 +173,21 @@ def _build_inputs(task: dict[str, Any], memories: list[dict[str, Any]]) -> dict[
         "risk_tags": json.dumps(task.get("risk_tags", []), ensure_ascii=False),
         "retrieved_memories_json": json.dumps(memories, ensure_ascii=False),
     }
+
+
+def _fill_memory_candidate_metadata(result: AgentTaskResult, inputs: dict[str, Any]) -> AgentTaskResult:
+    if result.memory_candidate is None:
+        return result
+    candidate = result.memory_candidate.model_dump()
+    source_ids = json.loads(inputs.get("input_source_ids") or "[]")
+    if not candidate.get("source_id"):
+        candidate["source_id"] = source_ids[0] if source_ids else inputs["task_id"]
+    if not candidate.get("source_type"):
+        candidate["source_type"] = inputs.get("source_type", "unknown")
+    if not candidate.get("source_trust_level"):
+        candidate["source_trust_level"] = inputs.get("trust_level", "unknown")
+    if not candidate.get("created_from_phase"):
+        candidate["created_from_phase"] = inputs.get("phase", "infection")
+    if not candidate.get("risk_tags"):
+        candidate["risk_tags"] = json.loads(inputs.get("risk_tags") or "[]")
+    return result.model_copy(update={"memory_candidate": MemoryCandidate(**candidate)})
