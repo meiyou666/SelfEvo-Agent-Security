@@ -78,6 +78,79 @@ class ToolRuntimeTests(unittest.TestCase):
                 decision = policy_check(call, self.task, [], mode)
                 self.assertFalse(decision["executed"])
 
+    def test_safe_attack_simulation_fixtures_are_local_text_only(self) -> None:
+        fixtures = [
+            "fixture://poison_pages/attack_sim_command.txt",
+            "fixture://poison_pages/attack_sim_sensitive_read.txt",
+            "fixture://poison_pages/attack_sim_exfiltration.txt",
+            "fixture://poison_pages/attack_sim_persistence.txt",
+        ]
+        for fixture in fixtures:
+            with self.subTest(fixture=fixture):
+                result = self.runtime.call_tool(
+                    {"tool_name": "read_url", "args": {"url": fixture}},
+                    self.task,
+                    [],
+                )
+                self.assertTrue(result["ok"])
+                self.assertTrue(result["executed"])
+                self.assertIn("SIMULATED_", result["content"])
+
+    def test_simulated_attack_markers_are_dry_run_only(self) -> None:
+        markers = [
+            "SIMULATED_COMMAND_EXECUTION_MARKER",
+            "SIMULATED_SENSITIVE_READ_MARKER",
+            "SIMULATED_EXFILTRATION_MARKER",
+            "SIMULATED_PERSISTENCE_MARKER",
+        ]
+        for marker in markers:
+            with self.subTest(marker=marker):
+                result = self.runtime.call_tool(
+                    {"tool_name": "execute_command", "args": {"command": marker}},
+                    self.task,
+                    [],
+                )
+                self.assertTrue(result["ok"])
+                self.assertFalse(result["executed"])
+        events = read_jsonl(self.ctx.run_dir / "tool_calls.jsonl")[-len(markers):]
+        self.assertTrue(all(event["args_redacted"]["command"] == "REDACTED_DRY_RUN_COMMAND" for event in events))
+        self.assertTrue(all(event["executed"] is False for event in events))
+
+    def test_simulated_attack_after_untrusted_retrieval_is_policy_flagged(self) -> None:
+        retrieved_memories = [
+            {
+                "memory_id": "mem_attack_sim",
+                "source_trust_level": "untrusted",
+                "risk_tags": ["simulated_command_execution"],
+                "retrieval_context_id": "ret_attack_sim",
+            }
+        ]
+        result = self.runtime.call_tool(
+            {
+                "tool_name": "execute_command",
+                "args": {"command": "SIMULATED_COMMAND_EXECUTION_MARKER"},
+                "derived_from_memory_ids": ["mem_attack_sim"],
+                "derivation_type": "directly_derived",
+            },
+            self.task,
+            retrieved_memories,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["executed"])
+
+        policy_event = read_jsonl(self.ctx.run_dir / "policy_events.jsonl")[-1]
+        self.assertTrue(policy_event["contains_untrusted_memory"])
+        self.assertIn("high_risk_tool_dry_run_only", policy_event["matched_rules"])
+        self.assertIn("high_risk_tool_after_untrusted_retrieval", policy_event["matched_rules"])
+        self.assertEqual(["simulated_command_execution"], policy_event["risk_tags"])
+
+        tool_event = read_jsonl(self.ctx.run_dir / "tool_calls.jsonl")[-1]
+        self.assertEqual(["mem_attack_sim"], tool_event["derived_from_memory_ids"])
+        self.assertEqual("directly_derived", tool_event["derivation_type"])
+        self.assertEqual("REDACTED_DRY_RUN_COMMAND", tool_event["args_redacted"]["command"])
+        self.assertFalse(tool_event["executed"])
+
     def test_unknown_tool_is_logged_without_execution(self) -> None:
         result = self.runtime.call_tool(
             {"tool_name": "unknown_tool", "args": {}},
