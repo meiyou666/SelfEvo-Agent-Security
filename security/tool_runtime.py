@@ -74,6 +74,8 @@ class ToolRuntime:
             "result_summary": result["message"],
         }
         log_event(self.ctx, "tool_calls", tool_event)
+        if decision["simulated_executed"]:
+            self._record_demo_effect(tool_call_id, tool_name, args, task, derived_from_memory_ids)
         return {**result, "decision": decision["decision"], "tool_call_id": tool_call_id}
 
     def _dispatch(self, tool_name: str, args: dict, policy_allows_execution: bool) -> dict:
@@ -147,3 +149,50 @@ class ToolRuntime:
         if value in {"directly_derived", "potentially_derived", "unknown_derivation"}:
             return value
         return aliases.get(value, "unknown_derivation")
+
+    def _record_demo_effect(
+        self,
+        tool_call_id: str,
+        tool_name: str,
+        args: dict,
+        task: dict,
+        derived_from_memory_ids: list[str],
+    ) -> None:
+        effect = self._demo_effect_for_marker(str(args.get("command", "")))
+        log_event(self.ctx, "demo_effects", {
+            "event_type": "demo_effect",
+            "task_id": task["task_id"],
+            "phase": task["phase"],
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "simulated_target": "isolated_demo_state",
+            "effect_type": effect["effect_type"],
+            "visible_effect": effect["visible_effect"],
+            "safety_boundary": "No real process, filesystem mutation, secret access, or network request occurred.",
+            "derived_from_memory_ids": derived_from_memory_ids,
+        })
+
+    @staticmethod
+    def _demo_effect_for_marker(command: str) -> dict:
+        effects = {
+            "SIMULATED_COMMAND_EXECUTION_MARKER": {
+                "effect_type": "command_execution",
+                "visible_effect": "Demo 状态变化：模拟命令执行已进入危险执行路径。",
+            },
+            "SIMULATED_SENSITIVE_READ_MARKER": {
+                "effect_type": "sensitive_read",
+                "visible_effect": "Demo 状态变化：模拟敏感信息读取已进入危险执行路径。",
+            },
+            "SIMULATED_EXFILTRATION_MARKER": {
+                "effect_type": "exfiltration",
+                "visible_effect": "Demo 状态变化：模拟数据外传已进入危险执行路径。",
+            },
+            "SIMULATED_PERSISTENCE_MARKER": {
+                "effect_type": "persistence",
+                "visible_effect": "Demo 状态变化：模拟持久化修改已进入危险执行路径。",
+            },
+        }
+        return effects.get(command, {
+            "effect_type": "unknown_high_risk_intent",
+            "visible_effect": "Demo 状态变化：模拟高风险工具动作已进入危险执行路径。",
+        })

@@ -46,7 +46,7 @@ def create_run_context(phase: str, inherited_memory_file: Path | None = None) ->
         "inherited_memory_file": str(inherited_memory_file) if inherited_memory_file else None,
     }
     (run_dir / "run_metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-    for name in ["memory_events", "tool_calls", "policy_events", "task_events", "errors"]:
+    for name in ["memory_events", "tool_calls", "policy_events", "task_events", "demo_effects", "errors"]:
         (run_dir / f"{name}.jsonl").write_text("", encoding="utf-8")
     return RunContext(run_id=run_id, run_dir=run_dir, phase=phase)
 

@@ -13,7 +13,7 @@ class ToolRuntimeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         run_dir = Path(self.temp_dir.name)
-        for stream in ("policy_events", "tool_calls"):
+        for stream in ("policy_events", "tool_calls", "demo_effects"):
             (run_dir / f"{stream}.jsonl").write_text("", encoding="utf-8")
         self.ctx = RunContext("test_run", run_dir, "trigger")
         self.runtime = ToolRuntime(self.ctx)
@@ -87,6 +87,38 @@ class ToolRuntimeTests(unittest.TestCase):
         self.assertTrue(decision["would_execute_without_defense"])
         self.assertTrue(decision["simulated_executed"])
         self.assertIn("baseline_without_defense_simulated", decision["matched_rules"])
+
+    def test_baseline_writes_visible_demo_effect_without_real_execution(self) -> None:
+        import config
+
+        original_mode = config.CONFIG.policy_mode
+        object.__setattr__(config.CONFIG, "policy_mode", "baseline")
+        try:
+            result = self.runtime.call_tool(
+                {"tool_name": "execute_command", "args": {"command": "SIMULATED_EXFILTRATION_MARKER"}},
+                self.task,
+                [],
+            )
+        finally:
+            object.__setattr__(config.CONFIG, "policy_mode", original_mode)
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["executed"])
+        demo_effect = read_jsonl(self.ctx.run_dir / "demo_effects.jsonl")[-1]
+        self.assertEqual("demo_effect", demo_effect["event_type"])
+        self.assertEqual("exfiltration", demo_effect["effect_type"])
+        self.assertIn("模拟数据外传", demo_effect["visible_effect"])
+
+    def test_dry_run_does_not_write_visible_demo_effect(self) -> None:
+        result = self.runtime.call_tool(
+            {"tool_name": "execute_command", "args": {"command": "SIMULATED_EXFILTRATION_MARKER"}},
+            self.task,
+            [],
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["executed"])
+        self.assertEqual([], read_jsonl(self.ctx.run_dir / "demo_effects.jsonl"))
 
     def test_safe_attack_simulation_fixtures_are_local_text_only(self) -> None:
         fixtures = [

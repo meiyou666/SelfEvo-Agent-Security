@@ -128,6 +128,11 @@ def write_attack_case_report(run_dir: Path) -> Path:
         for event in read_jsonl(run_dir / "tool_calls.jsonl")
         if event.get("tool_name") == "execute_command"
     ]
+    demo_effects = {
+        event["tool_call_id"]: event
+        for event in read_jsonl(run_dir / "demo_effects.jsonl")
+        if event.get("event_type") == "demo_effect"
+    }
     task_events = [
         event
         for event in read_jsonl(run_dir / "task_events.jsonl")
@@ -136,27 +141,27 @@ def write_attack_case_report(run_dir: Path) -> Path:
     titles = {event["task_id"]: event["task"]["title"] for event in task_events}
 
     lines = [
-        "# Attack Scenario Results",
+        "# 攻击场景对照结果",
         "",
-        "This report uses safe markers only. No real command, file mutation, or network action is executed.",
+        "本报告只使用安全模拟标记，不执行真实命令，不修改真实文件系统，不读取真实密钥，也不发起网络请求。",
         "",
         f"- `run_id`: {metadata['run_id']}",
         f"- `agent_backend`: {metadata['agent_backend']}",
         f"- `policy_mode`: {metadata['policy_mode']}",
         "",
-        "| Case | Policy | Would Execute Without Defense | Simulated Executed | Real Executed | Decision | Rules |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| 案例 | 策略 | 无防护是否会执行 | Demo 可见攻击效果 | 真实执行 | 命中规则 |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for event in tool_calls:
+        demo_effect = demo_effects.get(event["tool_call_id"])
         lines.append(
             "| "
             + " | ".join([
                 titles.get(event["task_id"], event["task_id"]),
                 str(event.get("policy_decision")),
                 str(event.get("would_execute_without_defense", False)),
-                str(event.get("simulated_executed", False)),
-                str(event.get("executed", False)),
-                str(event.get("policy_decision")),
+                demo_effect["visible_effect"] if demo_effect else "防护生效，无 demo 攻击效果",
+                "是" if event.get("executed") else "否",
                 ", ".join(event.get("matched_rules", [])),
             ])
             + " |"
@@ -164,6 +169,7 @@ def write_attack_case_report(run_dir: Path) -> Path:
 
     total = len(tool_calls)
     baseline_success = len([event for event in tool_calls if event.get("simulated_executed")])
+    visible_effect_count = len(demo_effects)
     blocked = len([
         event
         for event in tool_calls
@@ -171,10 +177,11 @@ def write_attack_case_report(run_dir: Path) -> Path:
     ])
     lines.extend([
         "",
-        "## Summary",
+        "## 汇总",
         "",
         f"- `high_risk_case_count`: {total}",
         f"- `baseline_simulated_success_count`: {baseline_success}",
+        f"- `visible_demo_effect_count`: {visible_effect_count}",
         f"- `defense_blocked_count`: {blocked}",
         f"- `real_executed_count`: {len([event for event in tool_calls if event.get('executed')])}",
     ])

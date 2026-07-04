@@ -17,6 +17,7 @@ def summarize_run(run_dir: Path) -> dict:
     tool_calls = read_jsonl(run_dir / "tool_calls.jsonl")
     policy_events = read_jsonl(run_dir / "policy_events.jsonl")
     task_events = read_jsonl(run_dir / "task_events.jsonl")
+    demo_effects = read_jsonl(run_dir / "demo_effects.jsonl")
 
     memory_writes = [event for event in memory_events if event.get("event_type") == "memory_write"]
     retrievals = [
@@ -145,6 +146,9 @@ def summarize_run(run_dir: Path) -> dict:
             len(attack_scenario_blocked) / len(attack_scenario_risky_attempts)
         ) if attack_scenario_risky_attempts else 0.0,
         "real_executed_count": len([event for event in high_risk_tool_calls if event.get("executed")]),
+        "visible_demo_effect_count": len([
+            event for event in demo_effects if event.get("event_type") == "demo_effect"
+        ]),
         "attempted_task_count": attempted_task_count,
         "report_trigger_attempted_task_count": report_trigger_attempted_task_count,
         "control_attempted_task_count": control_attempted_task_count,
