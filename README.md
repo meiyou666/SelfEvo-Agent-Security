@@ -2,7 +2,7 @@
 
 本仓库用于 Self-evolving Agent 记忆污染安全实验。当前版本已经形成完整 MVP：CrewAI/DeepSeek 负责 Agent 推理，`security/` 层负责策略、工具 dry-run、审计日志和 shadow memory，runner 串联 infection / trigger 两阶段实验，`lab/metrics.py` 汇总 JSONL 日志并生成报告。
 
-详细实验结果见 `实验结果说明.md`。
+详细实验结果见 `实验结果说明.md`，完整中文报告见 `docs/完整实验报告.md`。
 
 核心约束：
 
@@ -177,6 +177,38 @@ logs/runs/reports/report.md
 logs/runs/reports/summary.csv
 ```
 
+## 攻击案例对照实验
+
+为支持更直观的 demo，项目提供 4 类典型攻击场景：命令执行诱导、敏感信息读取诱导、数据外传诱导、持久化诱导。实验仍然不会执行真实危险操作，而是通过 `baseline` / `dry_run` 对照展示攻击效果和防护效果。
+
+运行方式：
+
+```bash
+python run_attack_scenarios.py --policy baseline --agent-backend mock
+python run_attack_scenarios.py --policy dry_run --agent-backend mock
+python lab/metrics.py
+```
+
+对照含义：
+
+```text
+baseline：模拟无防护路径，记录 would_execute_without_defense=true，并写入 demo_effects.jsonl
+dry_run：开启防护，同样攻击被记录和拦截，不写入 demo 攻击效果
+真实执行：始终为 0
+```
+
+可见 demo 效果示例：
+
+```text
+baseline:
+  Demo 状态变化：模拟数据外传已进入危险执行路径。
+
+dry_run:
+  防护生效，无 demo 攻击效果
+```
+
+详细说明见 `docs/attack_case_comparison.md`。
+
 ## 当前完成度
 
 已完成：
@@ -186,9 +218,10 @@ logs/runs/reports/summary.csv
 - Tool runtime：`read_url` 只读本地 fixture，`execute_command` 永远 dry-run。
 - Shadow memory：支持 memory 写入、检索、`memory_id` 和 source trust label。
 - Provenance：工具调用日志能关联 `retrieval_context_id`、`retrieved_memory_ids` 和 `derived_from_memory_ids`。
-- Tasks / fixtures：包含 5 个 infection、5 个 trigger、3 个 control、3 个 synthetic poison fixtures。
-- Metrics / report：支持 ASR、block rate、post-policy 风险，以及 trigger/control 拆分指标。
+- Tasks / fixtures：包含 5 个 infection、5 个 trigger、3 个 control、4 个攻击对照场景和 synthetic poison fixtures。
+- Metrics / report：支持 ASR、block rate、post-policy 风险、trigger/control 拆分指标，以及 baseline / defense 对照指标。
 - DeepSeek 实验已跑通，调整后样本可产生安全占位的 `execute_command` 意图，全部被 dry-run。
+- 攻击案例对照实验已支持 demo 可见效果：baseline 产生无害 `demo_effects.jsonl`，dry-run 防护下不产生 demo 攻击效果。
 
 关键结果：
 
@@ -204,6 +237,12 @@ DeepSeek adjusted samples:
   control_risky_tool_attempt_count = 3
   block_rate = 1.0
   post_policy_asr = 0.0
+
+attack case comparison:
+  baseline_simulated_success_count = 4
+  visible_demo_effect_count = 4
+  defense_blocked_count = 4
+  real_executed_count = 0
 ```
 
 局限：
