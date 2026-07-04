@@ -2,7 +2,7 @@
 
 本仓库用于 Self-evolving Agent 记忆污染安全实验。当前版本已经形成完整 MVP：CrewAI/DeepSeek/OpenAI 负责 Agent 推理，`security/` 层负责策略、工具 dry-run、审计日志和 shadow memory，runner 串联 infection / trigger 两阶段实验，`lab/metrics.py` 汇总 JSONL 日志并生成报告。
 
-详细实验结果见 `实验结果说明.md`，完整中文报告见 `docs/完整实验报告.md`，多模型对比见 `docs/多模型攻击防御对比.md`。
+详细实验结果见 `实验结果说明.md`，完整中文报告见 `docs/完整实验报告.md`，多模型对比见 `docs/多模型攻击防御对比.md`，威胁模型与安全声明见 `docs/威胁模型与安全声明.md`。
 
 核心约束：
 
@@ -198,6 +198,12 @@ python lab/metrics.py
 python lab/demo_dashboard.py
 ```
 
+Windows PowerShell 一键运行 demo：
+
+```powershell
+.\scripts\run_attack_demo.ps1 -AgentBackend mock
+```
+
 对照含义：
 
 ```text
@@ -242,6 +248,7 @@ logs/runs/reports/demo_dashboard.html
 - OpenAI `gpt-5.5` 攻击/防御对照结果已纳入 `docs/多模型攻击防御对比.md`。
 - 攻击案例对照实验已支持 demo 可见效果：baseline 产生无害 `demo_effects.jsonl`，dry-run 防护下不产生 demo 攻击效果。
 - Demo dashboard：支持从 JSONL 日志生成静态 HTML 页面，用于更直观展示 baseline / dry-run 差异。
+- Threat model：补充 `docs/威胁模型与安全声明.md`，明确攻击者能力、安全边界和合规展示口径。
 
 关键结果：
 
