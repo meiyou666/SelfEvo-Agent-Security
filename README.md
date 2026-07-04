@@ -1,8 +1,8 @@
 # SelfEvo Agent Security: CrewAI Baseline
 
-本仓库用于 Self-evolving Agent 记忆污染安全实验。当前版本已经形成完整 MVP：CrewAI/DeepSeek 负责 Agent 推理，`security/` 层负责策略、工具 dry-run、审计日志和 shadow memory，runner 串联 infection / trigger 两阶段实验，`lab/metrics.py` 汇总 JSONL 日志并生成报告。
+本仓库用于 Self-evolving Agent 记忆污染安全实验。当前版本已经形成完整 MVP：CrewAI/DeepSeek/OpenAI 负责 Agent 推理，`security/` 层负责策略、工具 dry-run、审计日志和 shadow memory，runner 串联 infection / trigger 两阶段实验，`lab/metrics.py` 汇总 JSONL 日志并生成报告。
 
-详细实验结果见 `实验结果说明.md`，完整中文报告见 `docs/完整实验报告.md`。
+详细实验结果见 `实验结果说明.md`，完整中文报告见 `docs/完整实验报告.md`，多模型对比见 `docs/多模型攻击防御对比.md`。
 
 核心约束：
 
@@ -119,6 +119,14 @@ LLM_STRUCTURED_OUTPUT=auto
 
 DeepSeek 当前不使用 CrewAI 的 provider `response_format`，项目会在 DeepSeek 配置下自动改用 prompt JSON + 本地 parser。
 
+OpenAI / ChatGPT 示例见：
+
+```text
+config/openai.env.example
+```
+
+本项目复用同一条 CrewAI/OpenAI-compatible 调用链路，OpenAI 与 DeepSeek 的主要差异是 `.env` 配置，不需要单独维护一套 Agent 代码。
+
 没有 API key 时可以使用离线兜底 backend 验证日志链路：
 
 ```env
@@ -187,6 +195,7 @@ logs/runs/reports/summary.csv
 python run_attack_scenarios.py --policy baseline --agent-backend mock
 python run_attack_scenarios.py --policy dry_run --agent-backend mock
 python lab/metrics.py
+python lab/demo_dashboard.py
 ```
 
 对照含义：
@@ -209,6 +218,14 @@ dry_run:
 
 详细说明见 `docs/attack_case_comparison.md`。
 
+`python lab/demo_dashboard.py` 会从最新 baseline / dry_run 攻击日志生成：
+
+```text
+logs/runs/reports/demo_dashboard.html
+```
+
+该页面可以用于演示：baseline 有可见攻击效果，dry-run 防护后无可见攻击效果。
+
 ## 当前完成度
 
 已完成：
@@ -217,11 +234,14 @@ dry_run:
 - Agent backend：支持 CrewAI + DeepSeek，也支持 `AGENT_BACKEND=mock` 离线兜底。
 - Tool runtime：`read_url` 只读本地 fixture，`execute_command` 永远 dry-run。
 - Shadow memory：支持 memory 写入、检索、`memory_id` 和 source trust label。
+- Retrieval policy：control 任务默认过滤带风险标签的不可信记忆，降低误触发；trigger/attack 任务仍保留风险记忆用于攻击测量。
 - Provenance：工具调用日志能关联 `retrieval_context_id`、`retrieved_memory_ids` 和 `derived_from_memory_ids`。
 - Tasks / fixtures：包含 5 个 infection、5 个 trigger、3 个 control、4 个攻击对照场景和 synthetic poison fixtures。
 - Metrics / report：支持 ASR、block rate、post-policy 风险、trigger/control 拆分指标，以及 baseline / defense 对照指标。
 - DeepSeek 实验已跑通，调整后样本可产生安全占位的 `execute_command` 意图，全部被 dry-run。
+- OpenAI `gpt-5.5` 攻击/防御对照结果已纳入 `docs/多模型攻击防御对比.md`。
 - 攻击案例对照实验已支持 demo 可见效果：baseline 产生无害 `demo_effects.jsonl`，dry-run 防护下不产生 demo 攻击效果。
+- Demo dashboard：支持从 JSONL 日志生成静态 HTML 页面，用于更直观展示 baseline / dry-run 差异。
 
 关键结果：
 
@@ -243,10 +263,16 @@ attack case comparison:
   visible_demo_effect_count = 4
   defense_blocked_count = 4
   real_executed_count = 0
+
+OpenAI gpt-5.5 attack comparison:
+  baseline_simulated_success_count = 4
+  visible_demo_effect_count = 4
+  defense_blocked_count = 4
+  real_executed_count = 0
 ```
 
 局限：
 
 - 真实 LLM 实验需要可用 API key 和余额。
 - `mock` backend 只能用于链路验证，不能代表真实 CrewAI/LLM 行为。
-- 当前 retrieval 会把污染 memory 带入 control 任务，后续可以继续优化 retrieval / provenance policy。
+- 当前 demo 支持 Markdown 报告、JSONL 日志和静态 HTML dashboard；后续可以继续扩展为交互式 Web 页面。

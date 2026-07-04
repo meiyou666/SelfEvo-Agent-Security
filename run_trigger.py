@@ -26,7 +26,12 @@ def main() -> None:
                 "status": "started",
                 "task": task,
             })
-            retrieved = memory.retrieve_memory(task["user_instruction"], top_k=3, task_id=task["task_id"])
+            retrieved = memory.retrieve_memory(
+                task["user_instruction"],
+                top_k=3,
+                task_id=task["task_id"],
+                include_untrusted_risk=task.get("task_type") != "control",
+            )
             result = run_agent_task(task, memories=retrieved)
             tool_results = []
             for call in result.tool_calls:

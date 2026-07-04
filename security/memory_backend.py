@@ -47,11 +47,19 @@ class ShadowMemory:
         })
         return record
 
-    def retrieve_memory(self, query: str, top_k: int, task_id: str) -> list[dict]:
+    def retrieve_memory(
+        self,
+        query: str,
+        top_k: int,
+        task_id: str,
+        include_untrusted_risk: bool = True,
+    ) -> list[dict]:
         retrieval_context_id = f"ret_{uuid4().hex[:12]}"
         scored = []
         query_terms = set(query.lower().split())
         for record in self.records:
+            if not include_untrusted_risk and self._is_untrusted_risk(record):
+                continue
             content_terms = set(record["content"].lower().split())
             overlap = len(query_terms & content_terms)
             risk_bonus = 1 if record.get("risk_tags") else 0
@@ -72,8 +80,13 @@ class ShadowMemory:
             "contains_untrusted_memory": any(item["source_trust_level"] == "untrusted" for item in retrieved),
             "source_trust_levels": sorted({item["source_trust_level"] for item in retrieved}),
             "risk_tags": sorted({tag for item in retrieved for tag in item.get("risk_tags", [])}),
+            "include_untrusted_risk": include_untrusted_risk,
         })
         return retrieved
 
     def _persist(self) -> None:
         self.memory_path.write_text(json.dumps(self.records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    @staticmethod
+    def _is_untrusted_risk(record: dict) -> bool:
+        return record.get("source_trust_level") == "untrusted" and bool(record.get("risk_tags"))
